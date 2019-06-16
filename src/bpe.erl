@@ -5,8 +5,6 @@
 -compile(export_all).
 -define(TIMEOUT, application:get_env(bpe,timeout,60000)).
 
-% Instance Management
-
 load(ProcName) -> {ok,Proc} = kvs:get(process,ProcName), Proc.
 
 cleanup(P) -> [ kvs:remove(hist,Id) || #hist{id=Id} <- bpe:hist(P) ],
@@ -15,7 +13,7 @@ cleanup(P) -> [ kvs:remove(hist,Id) || #hist{id=Id} <- bpe:hist(P) ],
 
 start(Proc0, Options) ->
     Pid = proplists:get_value(notification,Options,undefined),
-    Proc = case Proc0#process.id == undefined orelse Proc0#process.id == [] of
+    Proc = case Proc0#process.id == [] of
                 true -> Id = kvs:next_id("process",1),
                       Proc0#process{id=Id,task=Proc0#process.beginEvent,
                                     options = Options,notifications = Pid,
@@ -28,28 +26,21 @@ start(Proc0, Options) ->
                   {bpe_proc, start_link, [Proc]},
                   Restart, Shutdown, worker, [bpe_proc] },
 
-    case application:start(bpe) of
-         {error,{already_started,bpe}} -> skip;
-         _ -> {error,"restart"} end,
-
     case supervisor:start_child(bpe_sup,ChildSpec) of
-         {ok,_}   -> {ok,Proc#process.id};
-         {ok,_,_} -> {ok,Proc#process.id};
-         Else     -> Else end.
+         {ok,_}    -> {ok,Proc#process.id};
+         {ok,_,_}  -> {ok,Proc#process.id};
+         {error,_} -> {error,Proc#process.id} end.
 
 find_pid(Id) -> bpe:cache({process,Id}).
 
 process(ProcId)           -> gen_server:call(find_pid(ProcId),{get},            ?TIMEOUT).
-complete(ProcId)          -> %io:format("complete:~p~n",[ProcId]),
-                             gen_server:call(find_pid(ProcId),{complete},       ?TIMEOUT).
+complete(ProcId)          -> gen_server:call(find_pid(ProcId),{complete},       ?TIMEOUT).
 run(ProcId)               -> gen_server:call(find_pid(ProcId),{run},            ?TIMEOUT).
 until(ProcId,Task)        -> gen_server:call(find_pid(ProcId),{until,Task},     ?TIMEOUT).
 complete(Stage,ProcId)    -> gen_server:call(find_pid(ProcId),{complete,Stage}, ?TIMEOUT).
 amend(ProcId,Form)        -> gen_server:call(find_pid(ProcId),{amend,Form},     ?TIMEOUT).
 amend(ProcId,Form,noflow) -> gen_server:call(find_pid(ProcId),{amend,Form,true},?TIMEOUT).
 event(ProcId,Event)       -> gen_server:call(find_pid(ProcId),{event,Event},    ?TIMEOUT).
-
-add_recs(Proc, RecordsList) -> bpe_proc:set_rec_in_proc(Proc, RecordsList).
 
 delete_tasks(Proc, Tasks) ->
     Proc#process { tasks = [ Task || Task <- Proc#process.tasks,
@@ -63,13 +54,13 @@ hist(ProcId,N) -> case kvs:entries(kvs:get(feed,{hist,ProcId}),hist,N) of
 source(Name, Proc) ->
     case [ Task || Task <- events(Proc), element(#task.name,Task) == Name] of
          [T] -> T;
-         [] -> [];
+         [] -> #beginEvent{};
          E -> E end.
 
 task(Name, Proc) -> 
     case [ Task || Task <- tasks(Proc), element(#task.name,Task) == Name] of
          [T] -> T;
-         [] -> [];
+         [] -> #task{};
          E -> E end.
 
 doc(Rec, Proc) ->
@@ -90,18 +81,15 @@ new_task(Proc,GivenTask) ->
         [] -> Proc#process{tasks=[GivenTask|Proc#process.tasks]};
          _ -> {error,exist,Existed} end.
 
-delete(Proc) -> ok.
+delete(_Proc) -> ok.
 
-val(Document,Proc,Cond) -> val(Document,Proc,Cond,fun(X,Y)-> ok end).
+val(Document,Proc,Cond) -> val(Document,Proc,Cond,fun(_,_)-> ok end).
 val(Document,Proc,Cond,Action) ->
     case Cond(Document,Proc) of
          true -> Action(Document,Proc), {reply,Proc};
          {false,Message} -> {{reply,Message},Proc#process.task,Proc};
          ErrorList -> io:format("BPE:val/4 failed: ~tp~n",[ErrorList]),
                       {{reply,ErrorList},Proc#process.task,Proc} end.
-
-option(Proc, Key) -> proplists:get_value(Key,Proc#process.options).
-option(Proc, Key, Value) -> Proc#process{options=bpe_proc:plist_setkey(Key,1,Proc#process.options,{Key,Value})}.
 
 cache(Key, undefined) -> ets:delete(processes,Key);
 cache(Key, Value) -> ets:insert(processes,{Key,till(calendar:local_time(), ttl()),Value}), Value.

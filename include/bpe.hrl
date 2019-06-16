@@ -2,75 +2,104 @@
 -define(BPE_HRL, true).
 
 -include_lib("kvs/include/kvs.hrl").
--include("tour.hrl").
 
 % BPMN 2.0 API
 
 -record(task,         { name=[] :: [] | atom(),
-                        roles=[] :: binary(),
-                        module=[] :: [] | atom() }).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        roles=[] :: [] | binary() }).
 -record(userTask,     { name=[] :: [] | atom(),
-                        roles=[] :: binary(),
-                        module=[] :: [] | atom() }).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        roles=[] :: [] | binary() }).
 -record(serviceTask,  { name=[] :: [] | atom(),
-                        roles=[] :: binary(),
-                        module=[] :: [] | atom() }).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        roles=[] :: [] | binary()}).
 -record(receiveTask,  { name=[] :: [] | atom(),
-                        roles=[] :: binary(),
-                        module=[] :: [] | atom() }).
--record(messageEvent, { name=[] :: [] | atom(),
-                        payload=[] :: binary(),
-                        timeout=[] :: {integer(),{integer(),integer(),integer()}},
-                        module :: atom() }).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        roles=[] :: [] | binary()}).
+
+-record(messageEvent, { name=[] :: [] | atom() | string() | binary(),
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        payload=[] :: [] | binary(),
+                        timeout=[] :: [] | {integer(),{integer(),integer(),integer()}} }).
 -record(boundaryEvent,{ name=[] :: [] | atom(),
-                        payload=[] :: binary(),
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
+                        payload=[] :: [] | binary(),
                         timeout=[] :: {integer(),{integer(),integer(),integer()}},
-                        timeDate=[] :: binary(),
-                        timeDuration=[] :: binary(),
-                        timeCycle=[] :: binary(),
-                        module=[] :: [] | atom() }).
+                        timeDate=[] :: [] | binary(),
+                        timeDuration=[] :: [] | binary(),
+                        timeCycle=[] :: [] | binary() }).
 -record(timeoutEvent, { name=[] :: [] | atom(),
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple()),
                         payload=[] :: [] | binary(),
                         timeout=[] :: [] | {integer(),{integer(),integer(),integer()}},
                         timeDate=[] :: [] | binary(),
                         timeDuration=[] :: [] | binary(),
-                        timeCycle=[] :: [] | binary(),
-                        module=[] :: [] | atom() }).
+                        timeCycle=[] :: [] | binary() }).
 -record(beginEvent ,  { name=[] :: [] | atom(),
-                        module=[] :: [] | atom()}).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple())}).
 -record(endEvent,     { name=[] :: [] | atom(),
-                        module=[] :: [] | atom()}).
+                        module=[] :: [] | atom(),
+                        prompt=[] :: list(tuple())}).
+
 -record(sequenceFlow, { source=[] :: [] | atom(),
-                        target=[] :: [] | atom() }).
--record(hist,         { ?ITERATOR(feed),
+                        target=[] :: [] | atom() | list(atom()) }).
+
+-type histId() :: [] | integer() | {atom()|string(),any()}.
+
+-record(hist,         { id = [] :: histId(),
+                        container=feed :: [] | atom(),
+                        feed_id=[] :: any(),
+                        prev=[] :: [] | integer(),
+                        next=[] :: [] | integer(),
+                        feeds=[] :: list(),
                         name=[] :: [] | binary(),
-                        task=[] :: atom(),
-                        time=[] :: term() }).
--record(process,      { ?ITERATOR(feed), name=[] :: [] | binary(),
-                        roles=[] :: list(),
-                        tasks=[] :: list(#task{} | #serviceTask{} | #userTask{} | #receiveTask{}),
-                        events=[] :: list(#messageEvent{} | #boundaryEvent{} | #timeoutEvent{}),
-                        hist=[] :: [],
-                        flows=[] :: list(#sequenceFlow{}),
-                        rules=[] :: [],
+                        task=[] :: [] | atom() | {atom()|string(),any()},
                         docs=[] :: list(tuple()),
-                        options=[] :: term(),
-                        task=[] :: [] | atom(),
-                        timer=[] :: [] | binary(),
+                        time=[] :: term() }).
+
+-type tasks()  :: #task{} | #serviceTask{} | #userTask{} | #receiveTask{} | #beginEvent{} | #endEvent{}.
+-type events() :: #messageEvent{} | #boundaryEvent{} | #timeoutEvent{}.
+-type procId() :: [] | integer() | {atom(),any()}.
+
+-record(process,      { id = [] :: procId(),
+                        container=feed :: [] | atom(),
+                        feed_id=[] :: [] | atom() | term(),
+                        prev=[] :: [] | integer(),
+                        next=[] :: [] | integer(),
+                        name=[] :: [] | binary() | string() | atom(),
+                        feeds=[] :: list(),
+                        roles      = [] :: list(),
+                        tasks      = [] :: list(tasks()),
+                        events     = [] :: list(events()),
+                        hist       = [] :: [] | term(),
+                        flows      = [] :: list(#sequenceFlow{}),
+                        rules      = [] :: [] | term(),
+                        docs       = [] :: list(tuple()),
+                        options    = [] :: term(),
+                        task       = 'Init' :: [] | atom(),
+                        timer      = [] :: [] | reference(),
                         notifications=[] :: [] | term(),
-                        result=[] :: [] | binary(),
-                        started=[] :: [] | binary(),
-                        beginEvent=[] :: [] | atom(),
-                        endEvent=[] :: [] | atom()}).
+                        result     = [] :: [] | binary(),
+                        started    = [] :: [] | {term(),term(),term()},
+                        beginEvent = [] :: [] | atom(),
+                        endEvent   = [] :: [] | atom()}).
 
 % BPE API
 
--record(complete,     { id=[] :: [] | integer() }).
--record(proc,         { id=[] :: [] | integer() }).
--record(histo,        { id=[] :: [] | integer() }).
--record(create,       { proc=[] :: [] | #process{} | binary(),
-                        docs=[] :: [] | list(#join_application{} | #max_tour{} | #tour_list{}) }).
--record(amend,        { id=[] :: [] | integer(),
-                        docs=[] :: [] | list(#join_application{} | #max_tour{} | #tour_list{}) }).
+-record('Comp', { id=[]   :: [] | integer() }).
+-record('Proc', { id=[]   :: [] | integer() }).
+-record('Load', { id=[]   :: [] | integer() }).
+-record('Hist', { id=[]   :: [] | integer() }).
+-record('Make', { proc=[] :: [] | #process{} | binary(), docs=[] :: [] | list(tuple()) }).
+-record('Amen', { id=[]   :: [] | integer(), docs=[] :: [] | list(tuple()) }).
 
 -endif.
